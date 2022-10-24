@@ -10,7 +10,7 @@ use mpl_token_metadata::{
     ID as MetadataTokenId,
 };
 
-declare_id!("AzHXyVDs8XoRXjNE71hLDv9BDJjiCyAxN66UDCZNgk3y");
+declare_id!("h533EdWkTEQLp2DEgeXJREZHdzkzMvGX3yRy4ZXVf4x");
 
 mod constants {
     pub const POOL_LOCKING_PERIODS: [i64; 2] = [
