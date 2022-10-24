@@ -10,7 +10,7 @@ use mpl_token_metadata::{
     ID as MetadataTokenId,
 };
 
-declare_id!("h533EdWkTEQLp2DEgeXJREZHdzkzMvGX3yRy4ZXVf4x");
+declare_id!("9EoPTXAXnUC8RjX351GePk9hfZ8Nmjrb9ujYj2JJvxai");
 
 mod constants {
     pub const POOL_LOCKING_PERIODS: [i64; 2] = [
@@ -23,7 +23,25 @@ mod constants {
 pub mod anchor_nft_staking {
     use super::*;
 
+    pub fn initialize_pool(ctx: Context<InitializePool>) -> Result<()> {
+        require!(
+            !ctx.accounts.pool_account.is_initialized,
+            StakeError::AlreadyInitializedPool
+        );
+
+        ctx.accounts.pool_account.authority = ctx.accounts.user.key();
+        ctx.accounts.pool_account.is_initialized = true;
+        ctx.accounts.pool_account.staked_count = 0;
+
+        Ok(())
+    }
+
     pub fn stake(ctx: Context<Stake>, locking_period: i64) -> Result<()> {
+        require!(
+            ctx.accounts.pool_account.is_initialized,
+            StakeError::NotInitializedPool
+        );
+
         require!(
             ctx.accounts.stake_state.stake_state == StakeState::Unstaked,
             StakeError::AlreadyStaked
@@ -75,10 +93,17 @@ pub mod anchor_nft_staking {
         ctx.accounts.stake_state.end_time = current_time + locking_period;
         ctx.accounts.stake_state.is_initialized = true;
 
+        ctx.accounts.pool_account.staked_count += 1;
+
         Ok(())
     }
 
     pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
+        require!(
+            ctx.accounts.pool_account.is_initialized,
+            StakeError::NotInitializedPool
+        );
+
         require!(
             ctx.accounts.stake_state.is_initialized,
             StakeError::UninitializedAccount
@@ -129,9 +154,25 @@ pub mod anchor_nft_staking {
         token::revoke(cpi_revoke_ctx)?;
 
         ctx.accounts.stake_state.stake_state = StakeState::Unstaked;
+        ctx.accounts.pool_account.staked_count -= 1;
 
         Ok(())
     }
+}
+
+#[derive(Accounts)]
+pub struct InitializePool<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+    #[account(
+        init_if_needed,
+        payer=user,
+        space = std::mem::size_of::<Pool>() + 8,
+        seeds=["staking_pool".as_bytes().as_ref()],
+        bump
+    )]
+    pub pool_account: Account<'info, Pool>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -159,6 +200,8 @@ pub struct Stake<'info> {
     /// CHECK: Manual validation
     #[account(mut, seeds=["authority".as_bytes().as_ref()], bump)]
     pub program_authority: UncheckedAccount<'info>,
+    #[account(mut, seeds=["staking_pool".as_bytes().as_ref()], bump)]
+    pub pool_account: Account<'info, Pool>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub metadata_program: Program<'info, Metadata>,
@@ -191,6 +234,8 @@ pub struct Unstake<'info> {
     /// CHECK: manual check
     #[account(seeds = ["mint".as_bytes().as_ref()], bump)]
     pub stake_authority: UncheckedAccount<'info>,
+    #[account(mut, seeds=["staking_pool".as_bytes().as_ref()], bump)]
+    pub pool_account: Account<'info, Pool>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -205,6 +250,14 @@ impl anchor_lang::Id for Metadata {
     fn id() -> Pubkey {
         MetadataTokenId
     }
+}
+
+#[account]
+#[derive(Default)]
+pub struct Pool {
+    pub authority: Pubkey,
+    pub staked_count: i64,
+    pub is_initialized: bool,
 }
 
 #[account]
@@ -245,4 +298,10 @@ pub enum StakeError {
 
     #[msg("End time not over")]
     EndTimeNotOver,
+
+    #[msg("Pool not initialized")]
+    NotInitializedPool,
+
+    #[msg("Pool already initialized")]
+    AlreadyInitializedPool,
 }

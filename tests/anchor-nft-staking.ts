@@ -46,8 +46,15 @@ describe("anchor-nft-staking", () => {
     console.log("stake state pda: ", stakeStatePda.toBase58());
   })
 
+  it("Initialize Pool", async () => {
+    await program.methods
+      .initializePool()
+      .accounts({})
+      .rpc();
+  })
+
   it("Stakes", async () => {
-    const lockingPeriod = 10;
+    const lockingPeriod = 5;
 
     await program.methods
       .stake(new anchor.BN(lockingPeriod))
@@ -64,7 +71,7 @@ describe("anchor-nft-staking", () => {
   })
 
   it("Unstakes", async () => {
-    await delay(1000);
+    await delay(5000);
 
     await program.methods
       .unstake()
