@@ -1,35 +1,52 @@
 import * as anchor from "@project-serum/anchor"
 import { Program } from "@project-serum/anchor"
 import { AnchorNftStaking } from "../target/types/anchor_nft_staking"
-import { setupNft } from "./utils/setupNft"
 import { PROGRAM_ID as METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata"
+import {
+  bundlrStorage,
+  CreateNftOutput,
+  keypairIdentity,
+  Metaplex,
+} from "@metaplex-foundation/js"
 import { expect } from "chai"
-import { getAccount } from "@solana/spl-token"
-import { findCandyMachinesByPublicKeyFieldOperation } from "@metaplex-foundation/js"
+import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet"
 
 describe("anchor-nft-staking", () => {
-  // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env()
   anchor.setProvider(provider)
 
   const program = anchor.workspace.AnchorNftStaking as Program<AnchorNftStaking>
+  const wallet = anchor.workspace.AnchorNftStaking.provider.wallet as NodeWallet
 
-  const wallet = anchor.workspace.AnchorNftStaking.provider.wallet
-
-  let delegatedAuthPda: anchor.web3.PublicKey
   let stakeStatePda: anchor.web3.PublicKey
-  let nft: any
-  // let mintAuth: anchor.web3.PublicKey
-  // let mint: anchor.web3.PublicKey
-  // let tokenAddress: anchor.web3.PublicKey
+  let nft: CreateNftOutput;
 
-  before(async () => {
-    ;({ nft, delegatedAuthPda, stakeStatePda } =
-      await setupNft(program, wallet.payer))
+  it("Setup Test NFT", async () => {
+    const payer = wallet.payer
+    const metaplex = Metaplex.make(program.provider.connection)
+      .use(keypairIdentity(payer))
+      .use(bundlrStorage())
+
+    nft = await metaplex
+      .nfts()
+      .create({
+        uri: "",
+        name: "Test nft",
+        sellerFeeBasisPoints: 0,
+      })
+      .run();
+
+    stakeStatePda = (await anchor.web3.PublicKey.findProgramAddress(
+      [payer.publicKey.toBuffer(), nft.tokenAddress.toBuffer()],
+      program.programId
+    ))[0];
+
+    console.log("nft metadata pubkey: ", nft.metadataAddress.toBase58());
+    console.log("nft token address: ", nft.tokenAddress.toBase58());
+    console.log("stake state pda: ", stakeStatePda.toBase58());
   })
 
   it("Stakes", async () => {
-    // Add your test here.
     await program.methods
       .stake()
       .accounts({
@@ -38,26 +55,11 @@ describe("anchor-nft-staking", () => {
         nftEdition: nft.masterEditionAddress,
         metadataProgram: METADATA_PROGRAM_ID,
       })
-      .rpc()
+      .rpc();
 
-    const account = await program.account.userStakeInfo.fetch(stakeStatePda)
-    expect(account.stakeState === "Staked")
+    const account = await program.account.userStakeInfo.fetch(stakeStatePda);
+    expect(account.stakeState === "Staked");
   })
-
-  // it("Redeems", async () => {
-  //   await program.methods
-  //     .redeem()
-  //     .accounts({
-  //       nftTokenAccount: nft.tokenAddress,
-  //       stakeMint: mint,
-  //       userStakeAta: tokenAddress,
-  //     })
-  //     .rpc()
-
-  //   const account = await program.account.userStakeInfo.fetch(stakeStatePda)
-  //   expect(account.stakeState === "Unstaked")
-  //   const tokenAccount = await getAccount(provider.connection, tokenAddress)
-  // })
 
   it("Unstakes", async () => {
     await program.methods
@@ -67,12 +69,10 @@ describe("anchor-nft-staking", () => {
         nftMint: nft.mintAddress,
         nftEdition: nft.masterEditionAddress,
         metadataProgram: METADATA_PROGRAM_ID,
-        // stakeMint: mint,
-        // userStakeAta: tokenAddress,
       })
-      .rpc()
+      .rpc();
 
-    const account = await program.account.userStakeInfo.fetch(stakeStatePda)
-    expect(account.stakeState === "Unstaked")
+    const account = await program.account.userStakeInfo.fetch(stakeStatePda);
+    expect(account.stakeState === "Unstaked");
   })
 })
