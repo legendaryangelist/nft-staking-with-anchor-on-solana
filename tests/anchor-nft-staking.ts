@@ -47,8 +47,10 @@ describe("anchor-nft-staking", () => {
   })
 
   it("Stakes", async () => {
+    const lockingPeriod = 10;
+
     await program.methods
-      .stake()
+      .stake(new anchor.BN(lockingPeriod))
       .accounts({
         nftTokenAccount: nft.tokenAddress,
         nftMint: nft.mintAddress,
@@ -62,6 +64,8 @@ describe("anchor-nft-staking", () => {
   })
 
   it("Unstakes", async () => {
+    await delay(1000);
+
     await program.methods
       .unstake()
       .accounts({
@@ -76,3 +80,7 @@ describe("anchor-nft-staking", () => {
     expect(account.stakeState === "Unstaked");
   })
 })
+
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}

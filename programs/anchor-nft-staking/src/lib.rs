@@ -12,17 +12,30 @@ use mpl_token_metadata::{
 
 declare_id!("AzHXyVDs8XoRXjNE71hLDv9BDJjiCyAxN66UDCZNgk3y");
 
+mod constants {
+    pub const POOL_LOCKING_PERIODS: [i64; 2] = [
+        5, // 2 min
+        10, // 5 min
+    ];
+}
+
 #[program]
 pub mod anchor_nft_staking {
     use super::*;
 
-    pub fn stake(ctx: Context<Stake>) -> Result<()> {
+    pub fn stake(ctx: Context<Stake>, locking_period: i64) -> Result<()> {
         require!(
             ctx.accounts.stake_state.stake_state == StakeState::Unstaked,
             StakeError::AlreadyStaked
         );
 
+        require!(
+            constants::POOL_LOCKING_PERIODS.contains(&locking_period),
+            StakeError::UnexpectedLockingPeriod
+        );
+
         let clock = Clock::get().unwrap();
+        let current_time = clock.unix_timestamp;
         msg!("Approving delegate");
 
         let cpi_approve_program = ctx.accounts.token_program.to_account_info();
@@ -58,8 +71,8 @@ pub mod anchor_nft_staking {
         ctx.accounts.stake_state.token_account = ctx.accounts.nft_token_account.key();
         ctx.accounts.stake_state.user_pubkey = ctx.accounts.user.key();
         ctx.accounts.stake_state.stake_state = StakeState::Staked;
-        ctx.accounts.stake_state.stake_start_time = clock.unix_timestamp;
-        ctx.accounts.stake_state.last_stake_redeem = clock.unix_timestamp;
+        ctx.accounts.stake_state.stake_start_time = current_time;
+        ctx.accounts.stake_state.end_time = current_time + locking_period;
         ctx.accounts.stake_state.is_initialized = true;
 
         Ok(())
@@ -74,6 +87,14 @@ pub mod anchor_nft_staking {
         require!(
             ctx.accounts.stake_state.stake_state == StakeState::Staked,
             StakeError::InvalidStakeState
+        );
+
+        let clock = Clock::get().unwrap();
+        let current_time = clock.unix_timestamp;
+
+        require!(
+            ctx.accounts.stake_state.end_time > current_time,
+            StakeError::EndTimeNotOver
         );
 
         msg!("Thawing token account");
@@ -190,7 +211,7 @@ impl anchor_lang::Id for Metadata {
 pub struct UserStakeInfo {
     pub token_account: Pubkey,
     pub stake_start_time: i64,
-    pub last_stake_redeem: i64,
+    pub end_time: i64,
     pub user_pubkey: Pubkey,
     pub stake_state: StakeState,
     pub is_initialized: bool,
@@ -218,4 +239,10 @@ pub enum StakeError {
 
     #[msg("Stake state is invalid")]
     InvalidStakeState,
+
+    #[msg("Unexpected locking period")]
+    UnexpectedLockingPeriod,
+
+    #[msg("End time not over")]
+    EndTimeNotOver,
 }
