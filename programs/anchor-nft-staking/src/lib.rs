@@ -14,8 +14,8 @@ declare_id!("AzHXyVDs8XoRXjNE71hLDv9BDJjiCyAxN66UDCZNgk3y");
 
 mod constants {
     pub const POOL_LOCKING_PERIODS: [i64; 2] = [
-        5, // 2 min
-        10, // 5 min
+        120, // 2 min
+        300, // 5 min
     ];
 }
 
