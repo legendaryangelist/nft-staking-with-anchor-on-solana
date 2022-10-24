@@ -93,7 +93,7 @@ pub mod anchor_nft_staking {
         let current_time = clock.unix_timestamp;
 
         require!(
-            ctx.accounts.stake_state.end_time > current_time,
+            ctx.accounts.stake_state.end_time < current_time,
             StakeError::EndTimeNotOver
         );
 
