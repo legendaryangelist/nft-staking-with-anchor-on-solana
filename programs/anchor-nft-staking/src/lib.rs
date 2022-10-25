@@ -10,7 +10,7 @@ use mpl_token_metadata::{
     ID as MetadataTokenId,
 };
 
-declare_id!("9EoPTXAXnUC8RjX351GePk9hfZ8Nmjrb9ujYj2JJvxai");
+declare_id!("J2JrmDzqic6uy2xPmWq5H6WxbGqawwZqBpQnJA5dci2L");
 
 mod constants {
     pub const POOL_LOCKING_PERIODS: [i64; 2] = [
@@ -43,7 +43,7 @@ pub mod anchor_nft_staking {
         );
 
         require!(
-            ctx.accounts.stake_state.stake_state == StakeState::Unstaked,
+            !ctx.accounts.stake_state.staked_status,
             StakeError::AlreadyStaked
         );
 
@@ -86,11 +86,11 @@ pub mod anchor_nft_staking {
             &[&[b"authority", &[authority_bump]]],
         )?;
 
-        ctx.accounts.stake_state.token_account = ctx.accounts.nft_token_account.key();
+        ctx.accounts.stake_state.nft_mint = ctx.accounts.nft_mint.key();
         ctx.accounts.stake_state.user_pubkey = ctx.accounts.user.key();
-        ctx.accounts.stake_state.stake_state = StakeState::Staked;
+        ctx.accounts.stake_state.staked_status = true;
         ctx.accounts.stake_state.stake_start_time = current_time;
-        ctx.accounts.stake_state.end_time = current_time + locking_period;
+        ctx.accounts.stake_state.locking_period = locking_period;
         ctx.accounts.stake_state.is_initialized = true;
 
         ctx.accounts.pool_account.staked_count += 1;
@@ -110,7 +110,7 @@ pub mod anchor_nft_staking {
         );
 
         require!(
-            ctx.accounts.stake_state.stake_state == StakeState::Staked,
+            ctx.accounts.stake_state.staked_status,
             StakeError::InvalidStakeState
         );
 
@@ -118,7 +118,7 @@ pub mod anchor_nft_staking {
         let current_time = clock.unix_timestamp;
 
         require!(
-            ctx.accounts.stake_state.end_time < current_time,
+            (ctx.accounts.stake_state.stake_start_time + ctx.accounts.stake_state.locking_period) < current_time,
             StakeError::EndTimeNotOver
         );
 
@@ -153,7 +153,7 @@ pub mod anchor_nft_staking {
         let cpi_revoke_ctx = CpiContext::new(cpi_revoke_program, cpi_revoke_accounts);
         token::revoke(cpi_revoke_ctx)?;
 
-        ctx.accounts.stake_state.stake_state = StakeState::Unstaked;
+        ctx.accounts.stake_state.staked_status = false;
         ctx.accounts.pool_account.staked_count -= 1;
 
         Ok(())
@@ -225,7 +225,7 @@ pub struct Unstake<'info> {
         seeds = [user.key().as_ref(), nft_token_account.key().as_ref()],
         bump,
         constraint = *user.key == stake_state.user_pubkey,
-        constraint = nft_token_account.key() == stake_state.token_account
+        constraint = nft_mint.key() == stake_state.nft_mint
     )]
     pub stake_state: Account<'info, UserStakeInfo>,
     /// CHECK: manual check
@@ -261,25 +261,14 @@ pub struct Pool {
 }
 
 #[account]
+#[derive(Default)]
 pub struct UserStakeInfo {
-    pub token_account: Pubkey,
+    pub nft_mint: Pubkey,
     pub stake_start_time: i64,
-    pub end_time: i64,
+    pub locking_period: i64,
     pub user_pubkey: Pubkey,
-    pub stake_state: StakeState,
+    pub staked_status: bool,
     pub is_initialized: bool,
-}
-
-#[derive(Debug, PartialEq, AnchorDeserialize, AnchorSerialize, Clone)]
-pub enum StakeState {
-    Unstaked,
-    Staked,
-}
-
-impl Default for StakeState {
-    fn default() -> Self {
-        StakeState::Unstaked
-    }
 }
 
 #[error_code]

@@ -67,11 +67,11 @@ describe("anchor-nft-staking", () => {
       .rpc();
 
     const account = await program.account.userStakeInfo.fetch(stakeStatePda);
-    expect(account.stakeState === "Staked");
+    expect(account.stakedStatus === true);
   })
 
   it("Unstakes", async () => {
-    await delay(5000);
+    await delay(6000);
 
     await program.methods
       .unstake()
@@ -84,7 +84,7 @@ describe("anchor-nft-staking", () => {
       .rpc();
 
     const account = await program.account.userStakeInfo.fetch(stakeStatePda);
-    expect(account.stakeState === "Unstaked");
+    expect(account.stakedStatus === false);
   })
 })
 
