@@ -10,7 +10,7 @@ use mpl_token_metadata::{
     ID as MetadataTokenId,
 };
 
-declare_id!("J2JrmDzqic6uy2xPmWq5H6WxbGqawwZqBpQnJA5dci2L");
+declare_id!("3pERDFaDc3R6JedwSdd2mSvrNFjJGrXvfszwYvdmTeqJ");
 
 mod constants {
     pub const POOL_LOCKING_PERIODS: [i64; 2] = [
@@ -154,6 +154,7 @@ pub mod anchor_nft_staking {
         token::revoke(cpi_revoke_ctx)?;
 
         ctx.accounts.stake_state.staked_status = false;
+        ctx.accounts.stake_state.unstaked_at = current_time;
         ctx.accounts.pool_account.staked_count -= 1;
 
         Ok(())
@@ -266,6 +267,7 @@ pub struct UserStakeInfo {
     pub nft_mint: Pubkey,
     pub stake_start_time: i64,
     pub locking_period: i64,
+    pub unstaked_at: i64,
     pub user_pubkey: Pubkey,
     pub staked_status: bool,
     pub is_initialized: bool,
